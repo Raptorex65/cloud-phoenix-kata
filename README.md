@@ -21,7 +21,7 @@ that were introduced during development. In particular:
 ## Application Requirements
 
 - Runs on Node.js 8.11.1 LTS
-- MongoDB as Database
+- MongoDB as Database(single node)
 - Environment variables:
     - PORT - Application HTTP Exposed Port
     - DB_CONNECTION_STRING - Database connection string `mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]`
@@ -38,4 +38,4 @@ that were introduced during development. In particular:
 3. Backup the logs and database with rotation of 7 days
 4. Notify any CPU peak
 5. Implements a CI/CD pipeline for the code
-6. Scale when the number of request are greater than 10 req /sec
+6. Scale when the number of request are greater than 100 req /min
