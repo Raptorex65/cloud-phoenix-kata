@@ -3,6 +3,11 @@ phases:
   pre_build:
     commands:
       - echo Started on `date`
+      - amazon-linux-extras install docker -y
+      - systemctl start docker
+      - systemctl enable docker
+      - usermod -a -G docker ec2-user
+
   build:
     commands:
       - docker build --force-rm -t phoenix-codebuild-image .
