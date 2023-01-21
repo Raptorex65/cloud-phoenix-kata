@@ -38,9 +38,6 @@ pipeline {
         stage('Create Infrastructure for the App') {
             steps {
                 echo 'Creating Infrastructure with CFN Stacks'
-                sh 'cd cloud-phoenix-kata'
-                sh 'sudo chmod x+ deploy.sh'
-                sh ". ./deploy.sh"
                 sh """
                 aws cloudformation create-stack \
                 --stack-name PhoenixStack \
