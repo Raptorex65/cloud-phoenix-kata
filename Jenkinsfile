@@ -23,7 +23,6 @@ pipeline {
         stage('Build App Docker Image') {
             steps {
                 echo 'Building App Image'
-                sh 'cd cloud-phoenix-kata'
                 sh 'docker build --force-rm -t "$ECR_REPO_NAME" .'
                 sh 'docker image ls'
             }
