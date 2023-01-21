@@ -1,6 +1,7 @@
 pipeline {
     agent any
     environment {
+        ECR_REPO_NAME = "phoenix-jenkins-repo"
         APP_NAME = "phoenix-app-withjenkins"
         AWS_REGION = "us-east-1"        
         AWS_ACCOUNT_ID=sh(script:'aws sts get-caller-identity --query Account --output text', returnStdout:true).trim()
@@ -23,7 +24,7 @@ pipeline {
             steps {
                 echo 'Building App Image'
                 sh 'cd cloud-phoenix-kata'
-                sh 'docker build --force-rm -t phoenix-app-repo .'
+                sh 'docker build --force-rm -t "$ECR_REPO_NAME" .'
                 sh 'docker image ls'
             }
         }
