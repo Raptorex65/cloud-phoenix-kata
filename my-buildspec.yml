@@ -1,6 +1,5 @@
 version: 0.2
 env:
-  variables:
   parameter-store:
     DOCKERHUB_TOKEN: /dockerhub/token
     DOCKERHUB_USER: /dockerhub/user
