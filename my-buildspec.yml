@@ -3,13 +3,12 @@ phases:
   pre_build:
     commands:
       - echo Started on `date`
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 075897120159.dkr.ecr.us-east-1.amazonaws.com
   build:
     commands:
       - docker build --force-rm -t phoenix-codebuild-image .
+      - docker tag phoenix-codebuild-image:latest 075897120159.dkr.ecr.us-east-1.amazonaws.com/phoenix-codebuild-image:latest
 
   post_build:
     commands:
-      - docker tag phoenix-codebuild-image:latest 075897120159.dkr.ecr.us-east-1.amazonaws.com/phoenix-codebuild-image:latest
       - docker push 075897120159.dkr.ecr.us-east-1.amazonaws.com/phoenix-codebuild-image:latest
       - echo Build completed on `date`
