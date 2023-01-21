@@ -43,7 +43,7 @@ pipeline {
                 --stack-name PhoenixStack \
                 --template-body file://cfn-structure.yaml \
                 --capabilities CAPABILITY_IAM \
-                --region us-east-1"
+                --region us-east-1
                 """
             }
         }
