@@ -1,8 +1,12 @@
 version: 0.2
 env:
+  variables:
+    IMAGE_REPO_NAME: phoenix-build
+    IMAGE_TAG: Latest
   parameter-store:
-    DOCKERHUB_TOKEN: /dockerhub/token
-    DOCKERHUB_USER: /dockerhub/user
+    DOCKERHUB_TOKEN: /CodeBuild/DOCKERHUB_TOKEN
+    DOCKERHUB_USER: /CodeBuild/DOCKERHUB_USER
+    AWS_ACCOUNT_ID: /CodeBuild/AWS_ACCOUNT_ID
 phases:
   pre_build:
     commands:
@@ -10,7 +14,6 @@ phases:
       - echo docker info
       - aws --version
       - echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USER} --password-stdin
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 075897120159.dkr.ecr.us-east-1.amazonaws.com  
   build:
     commands:
       - docker build -t ${IMAGE_REPO_NAME}:${IMAGE_TAG} .
