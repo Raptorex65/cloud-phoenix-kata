@@ -144,6 +144,10 @@ Resources:
           ToPort: 80
           IpProtocol: tcp
           CidrIp: '0.0.0.0/0'
+        - FromPort: 443
+          ToPort: 443
+          IpProtocol: tcp
+          CidrIp: '0.0.0.0/0'      
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-LoadBalancerSG'
@@ -235,6 +239,18 @@ Resources:
         - !Ref PublicSubnet2
       IpAddressType: ipv4
 
+  ALBDNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: cloudbundle.net.
+      Comment: Zone apex alias targeted to ALBDNSRecord LoadBalancer.
+      RecordSets:
+      - Name: phoenix.cloudbundle.net.
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt 'ApplicationLoadBalancer.CanonicalHostedZoneID'
+          DNSName: !GetAtt 'ApplicationLoadBalancer.DNSName'
+
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -257,6 +273,7 @@ Resources:
       Tags:
         - Key: Name
           Value: 'target-group'
+
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -274,6 +291,7 @@ Resources:
             Path: "/#{path}"
             Query: "#{query}"
             StatusCode: "HTTP_301"
+
   WebServerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -355,6 +373,9 @@ Resources:
               mkdir efs
               sudo chown ec2-user:ec2-user efs
               sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${FileSystemId}".efs.us-east-1.amazonaws.com:/ efs
+              mkdir efs/logs efs/data
+              sed 's|/var/log/mongodb|/home/ec2-user/efs/logs|g' /etc/mongod.conf
+              sed 's|/var/lib/mongo|/home/ec2-user/efs/data|g' /etc/mongod.conf
               # clone app and install npm dependencies
               cd /home/ec2-user/
               git clone https://github.com/Raptorex65/cloud-phoenix-kata.git
