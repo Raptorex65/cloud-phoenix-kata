@@ -1,22 +1,16 @@
 version: 0.2
 env:
   parameter-store:
-    DOCKERHUB_TOKEN: /CodeBuild/DOCKERHUB_TOKEN
-    DOCKERHUB_USER: /CodeBuild/DOCKERHUB_USER
-    AWS_ACCOUNT_ID: /CodeBuild/AWS_ACCOUNT_ID
+    DOCKERHUB_TOKEN: /dockerhub/token
+    DOCKERHUB_USER: /dockerhub/user
 phases:
   pre_build:
     commands:
-      - echo Started on `date`
-      - echo docker info
-      - aws --version
-      - echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USER} --password-stdin
+      - echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USER} --password-stdin 
   build:
     commands:
-      - docker build -t phoenix .
-      - docker tag phoenix:latest ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix:latest
-
+      - docker build -t phoenix-app:latest .
   post_build:
     commands:
-      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix:latest
-      - echo Build completed on `date`
+      - docker tag phoenix-app:latest ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix-app:latest
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix-app:latest
