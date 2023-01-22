@@ -1,9 +1,9 @@
 version: 0.2
 env:
   variables:
-    IMAGE_REPO_NAME: 'phoenix-app'
-    IMAGE_TAG: 'latest'
-    AWS_DEFAULT_REGION: 'us-east-1'
+    IMAGE_REPO_NAME: "phoenix-app"
+    IMAGE_TAG: "latest"
+    AWS_DEFAULT_REGION: "us-east-1"
   parameter-store:
     DOCKERHUB_TOKEN: /CodeBuild/DOCKERHUB_TOKEN
     DOCKERHUB_USER: /CodeBuild/DOCKERHUB_USER
