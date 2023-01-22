@@ -1,7 +1,7 @@
 version: 0.2
 env:
   variables:
-    IMAGE_REPO_NAME: 'phoenix-build'
+    IMAGE_REPO_NAME: 'phoenix'
     IMAGE_TAG: 'latest'
     AWS_DEFAULT_REGION: 'us-east-1'
   parameter-store:
