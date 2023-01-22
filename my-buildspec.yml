@@ -13,10 +13,10 @@ phases:
       - echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USER} --password-stdin
   build:
     commands:
-      - docker build -t phoenix-app .
-      - docker tag phoenix-app:latest ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix-app:latest
+      - docker build -t phoenix .
+      - docker tag phoenix:latest ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix:latest
 
   post_build:
     commands:
-      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix-app:latest
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/phoenix:latest
       - echo Build completed on `date`
