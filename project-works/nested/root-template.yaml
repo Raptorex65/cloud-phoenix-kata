@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+
+Parameters:
+  WebServerImage:
+    Type: AWS::EC2::Image::Id
+    Description: AMI for the web server stack  
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'network-template.yaml'
+
+  LoadBalancingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'load-balancing-template.yaml'
+      Parameters:
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        Subnets: !GetAtt NetworkStack.Outputs.PublicSubnets
+        LoadBalancerSecurityGroup: !GetAtt NetworkStack.Outputs.LoadBalancerSecurityGroup
+
+  AutoScalingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'auto-scaling-template.yaml'
+      Parameters:
+        ImageId: !Ref WebServerImage
+        WebServerSecurityGroup: !GetAtt NetworkStack.Outputs.WebServerSecurityGroup
+        Subnets: !GetAtt NetworkStack.Outputs.PublicSubnets
+        TargetGroupARN: !GetAtt LoadBalancingStack.Outputs.TargetGroupARN
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        LoadBalancerFullName: !GetAtt LoadBalancingStack.Outputs.LoadBalancerFullName
+        TargetGroupFullName: !GetAtt LoadBalancingStack.Outputs.TargetGroupFullName
+        SubnetId: !Select
+          - "0"
+          - Fn::Split: [ ',', !GetAtt NetworkStack.Outputs.PrivateSubnets ]
+
+
+
+
+Outputs:
+  WebsiteDNS:
+    Description: DNS name of the website
+    Value: !GetAtt LoadBalancingStack.Outputs.LoadBalancerDNSName

@@ -1,6 +1,7 @@
 pipeline {
     agent any
     environment {
+        ECR_REPO_NAME = "phoenix-jenkins-repo"
         APP_NAME = "phoenix-app-withjenkins"
         AWS_REGION = "us-east-1"        
         AWS_ACCOUNT_ID=sh(script:'aws sts get-caller-identity --query Account --output text', returnStdout:true).trim()
@@ -22,8 +23,7 @@ pipeline {
         stage('Build App Docker Image') {
             steps {
                 echo 'Building App Image'
-                sh 'cd cloud-phoenix-kata'
-                sh 'docker build --force-rm -t phoenix-app-repo .'
+                sh 'docker build --force-rm -t "$ECR_REPO_NAME" .'
                 sh 'docker image ls'
             }
         }
@@ -38,9 +38,13 @@ pipeline {
         stage('Create Infrastructure for the App') {
             steps {
                 echo 'Creating Infrastructure with CFN Stacks'
-                sh 'cd cloud-phoenix-kata'
-                sh 'sudo chmod x+ deploy.sh'
-                sh ". ./deploy.sh"
+                sh """
+                aws cloudformation create-stack \
+                --stack-name PhoenixStack \
+                --template-body file://cfn-structure.yaml \
+                --capabilities CAPABILITY_IAM \
+                --region us-east-1
+                """
             }
         }
 

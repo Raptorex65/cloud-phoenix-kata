@@ -1,0 +1,45 @@
+Resources:
+  ExperimentTemplate:
+    Type: 'AWS::FIS::ExperimentTemplate'
+    Properties: 
+      Description: 'stop an instance based on a tag'
+      Actions: 
+        stopInstances:
+          ActionId: 'aws:ec2:stop-instances'
+          Parameters: 
+            startInstancesAfterDuration: 'PT2M'
+          Targets:
+            Instances: oneRandomInstance
+      Targets: 
+        oneRandomInstance:
+          ResourceTags:
+            'env': 'prod'
+          ResourceType: 'aws:ec2:instance'
+          SelectionMode: 'COUNT(1)'
+      StopConditions:
+        - Source: 'none'
+      Tags: 
+        Name: 'fisStopInstances'
+      RoleArn: !GetAtt FISRole.Arn
+  FISRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Principal:
+              Service: 'fis.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'FISRoleEC2Actions'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:RebootInstances'
+                  - 'ec2:StopInstances'
+                  - 'ec2:StartInstances'
+                  - 'ec2:TerminateInstances'
+                Resource: 'arn:aws:ec2:*:*:instance/*'
