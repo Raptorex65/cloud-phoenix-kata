@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion : '2010-09-09'
+Description: 'Stack for CodePipeline'
+
+Parameters:
+  PipelineName:
+    Type: String
+    Description: Pipeline Name (Lower case only, since S3 bucket names can only have lowercase)
+    Default: phoenix-pipeline
+
+  CodeBuildPhoenix:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${PipelineName}-Build-Project'
+      Artifacts: NO_ARTIFACTS
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-aarch64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: varName1
+            Value: varValue1
+          - Name: varName2
+            Value: varValue2
+            Type: PLAINTEXT
+          - Name: varName3
+            Value: /CodeBuild/testParameter
+            Type: PARAMETER_STORE
+      ServiceRole: !Ref CodeBuildPhoenixRole
+      Source:
+        Type: GITHUB
+        Location: https://github.com/Raptorex65/cloud-phoenix-kata.git
+
+
+  CodeBuildPhoenixRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Version: "2012-10-17"
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - codebuild.amazonaws.com
+          Action:
+            - "sts:AssumeRole"
+    Policies:
+      - PolicyName: "PushImageToEcr"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ecr:BatchGetImage
+                - ecr:BatchCheckLayerAvailability
+                - ecr:CompleteLayerUpload
+                - ecr:GetDownloadUrlForLayer
+                - ecr:InitiateLayerUpload
+                - ecr:PutImage
+                - ecr:UploadLayerPart
+                - ecr:GetAuthorizationToken
+              Resource: "*"
+      - PolicyName: "CodeBuildLogsRole"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+
+Outputs:
+  ProjectName:
+    Value: !Ref CodeBuildPhoenix
+    Description: CodeBuild project name

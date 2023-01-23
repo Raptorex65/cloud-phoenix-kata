@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+Parameters:
+  WebServerImage:
+    Type: AWS::EC2::Image::Id
+    Description: AMI for the web server stack
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-1.amazonaws.com/phoenix-kata-bucket/03f3ec6da089a8148dfdc97c6b82cbe7.template
+  LoadBalancingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-1.amazonaws.com/phoenix-kata-bucket/2ee424c92568581e739a4cdacc8b32b5.template
+      Parameters:
+        VpcId:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.VpcId
+        Subnets:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.PublicSubnets
+        LoadBalancerSecurityGroup:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.LoadBalancerSecurityGroup
+  AutoScalingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.us-east-1.amazonaws.com/phoenix-kata-bucket/191f1b846e13f15c63ce6235755dbea1.template
+      Parameters:
+        ImageId:
+          Ref: WebServerImage
+        WebServerSecurityGroup:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.WebServerSecurityGroup
+        Subnets:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.PublicSubnets
+        TargetGroupARN:
+          Fn::GetAtt:
+          - LoadBalancingStack
+          - Outputs.TargetGroupARN
+        VpcId:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.VpcId
+        LoadBalancerFullName:
+          Fn::GetAtt:
+          - LoadBalancingStack
+          - Outputs.LoadBalancerFullName
+        TargetGroupFullName:
+          Fn::GetAtt:
+          - LoadBalancingStack
+          - Outputs.TargetGroupFullName
+        SubnetId:
+          Fn::Select:
+          - '0'
+          - Fn::Split:
+            - ','
+            - Fn::GetAtt:
+              - NetworkStack
+              - Outputs.PrivateSubnets
+Outputs:
+  WebsiteDNS:
+    Description: DNS name of the website
+    Value:
+      Fn::GetAtt:
+      - LoadBalancingStack
+      - Outputs.LoadBalancerDNSName

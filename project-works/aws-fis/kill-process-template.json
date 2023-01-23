@@ -1,0 +1,41 @@
+{
+    "description": "crash-ex",
+    "targets": {
+        "Instances-Target-1": {
+            "resourceType": "aws:ec2:instance",
+            "resourceTags": {
+                "Name": "SuperStack-WebServer"
+            },
+            "selectionMode": "COUNT(1)"
+        }
+    },
+    "actions": {
+        "CrashApp": {
+            "actionId": "aws:ssm:send-command",
+            "parameters": {
+                "documentArn": "arn:aws:ssm:us-east-1::document/AWSFIS-Run-Kill-Process",
+                "documentParameters": "{\"ProcessName\":\"mongod\",\"Signal\":\"SIGKILL\"}",
+                "duration": "PT3M"
+            },
+            "targets": {
+                "Instances": "Instances-Target-1"
+            }
+        }
+    },
+    "stopConditions": [
+        {
+            "source": "none"
+        }
+    ],
+    "roleArn": "arn:aws:iam::075897120159:role/service-role/AWSFISIAMRole-1674224188753",
+    "logConfiguration": {
+        "s3Configuration": {
+            "bucketName": "phoenix-crash-bucket",
+            "prefix": "phoenix"
+        },
+        "logSchemaVersion": 1
+    },
+    "tags": {
+        "Crash": "Experiment"
+    }
+}
