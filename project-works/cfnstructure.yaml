@@ -177,14 +177,9 @@ Resources:
         GroupDescription: Security group for Amazon EFS
         SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 2409
-          ToPort: 2409
-          CidrIp: 0.0.0.0/0
-        SecurityGroupEgress:
-        - FromPort: -1
-          ToPort: -1
-          IpProtocol: "-1"
-          CidrIp: "0.0.0.0/0"
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
 
   FileSystemResource:
     Type: 'AWS::EFS::FileSystem'
