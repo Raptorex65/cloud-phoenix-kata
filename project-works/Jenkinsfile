@@ -41,7 +41,7 @@ pipeline {
                 sh """
                 aws cloudformation create-stack \
                 --stack-name PhoenixStack \
-                --template-body file://cfn-structure.yaml \
+                --template-body file://cfnstructure.yaml \
                 --capabilities CAPABILITY_IAM \
                 --region us-east-1
                 """
