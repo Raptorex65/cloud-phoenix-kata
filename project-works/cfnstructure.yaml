@@ -20,7 +20,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${AWS::StackName}-vpc'
   
   # Route tables ---
   PublicRouteTable:
@@ -34,6 +34,10 @@ Resources:
 
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Internet-Gateway'
 
   InternetGatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
@@ -184,7 +188,6 @@ Resources:
   FileSystemResource:
     Type: 'AWS::EFS::FileSystem'
     Properties:
-      AvailabilityZoneName: !GetAtt PublicSubnet1.AvailabilityZone
       BackupPolicy:
         Status: ENABLED
       Encrypted: true
@@ -216,11 +219,19 @@ Resources:
             Resource: 
               - '*'
 
-  MountTarget:
+  MountTarget1:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref FileSystemResource
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroups:
+      - !Ref MountTargetSecurityGroup
+
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystemResource
+      SubnetId: !Ref PrivateSubnet2
       SecurityGroups:
       - !Ref MountTargetSecurityGroup
 
@@ -287,17 +298,17 @@ Resources:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
-          - 
-            Effect: Allow
+          - Effect: Allow
             Principal:
               Service:
                 - ec2.amazonaws.com
-                - cloudformation.amazonaws.com
             Action:
               - sts:AssumeRole
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonSSMFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+        - "arn:aws:iam::aws:policy/AutoScalingFullAccess"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -308,6 +319,7 @@ Resources:
 
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn: InternetGateway
     Properties:
       LaunchTemplateData:
         InstanceType: t2.micro
@@ -360,11 +372,13 @@ Resources:
               # Install build tools
               yum install -y gcc-c++ make
               # configuration for EFS
+              sudo yum install -y amazon-efs-utils
               cd /home/ec2-user/
-              mkdir efs
+              sudo mkdir efs
               sudo chown ec2-user:ec2-user efs
               sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${FileSystemId}".efs.us-east-1.amazonaws.com:/ efs
-              mkdir efs/logs efs/data
+              sudo mkdir efs/logs efs/data
+              #change mongodb data and log directories to efs
               sed 's|/var/log/mongodb|/home/ec2-user/efs/logs|g' /etc/mongod.conf
               sed 's|/var/lib/mongo|/home/ec2-user/efs/data|g' /etc/mongod.conf
               # install codedeploy agent
