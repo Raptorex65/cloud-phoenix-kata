@@ -21,7 +21,7 @@ Parameters:
   GitHubBranch:
     Type: String
     Description: GitHub Branch
-    Default: prod
+    Default: master
   GitHubToken:
     Type: AWS::SSM::Parameter::Value<String>
     Default: Github_Token
@@ -74,14 +74,14 @@ Resources:
             InputArtifacts:
               - Name: BuildCode
             OutputArtifacts:
-              - Name: Artifact
+              - Name: DeployArtifact
             ActionTypeId:
               Category: Deploy
               Owner: AWS
               Version: 1
               Provider: CloudFormation
             Configuration: 
-              ApplicationName: PhoenixApplix 
+              ApplicationName: PhoenixApp
               DeploymentGroupName: PhoenixAppDG
               ActionMode: CREATE_UPDATE
               ChangeSetName: pipeline-changeset
@@ -97,20 +97,14 @@ Resources:
   CodeBuildPhoenix:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${PipelineName}-Build-Project'
+      Name: !Sub '${PipelineName}-build-project'
       Artifacts: 
-        Type: no_artifacts
+        Type: "no_artifacts"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:4.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: IMAGE_REPO_NAME
-            Value: phoenix-build
-            Type: PLAINTEXT
-          - Name: IMAGE_TAG
-            Value: Latest
-            Type: PLAINTEXT
           - Name: AWS_DEFAULT_REGION
             Value: us-east-1
             Type: PLAINTEXT
