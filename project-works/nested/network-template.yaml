@@ -1,7 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  Network stack template for
-  AWS CloudFormation Step by Step: Intermediate to Advanced course.
+Description: Network resources nested stack template 
 
 Resources:
   Vpc:

@@ -1,7 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  Auto scaling stack template for
-  AWS CloudFormation Step by Step: Intermediate to Advanced course.
+Description: Auto scaling nested stack template
 
 Parameters:
   VpcId:
@@ -94,8 +92,8 @@ Resources:
       GroupDescription: Security group for mount target
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: 2409
-        ToPort: 2409
+        FromPort: 2049
+        ToPort: 2049
         CidrIp: 0.0.0.0/0
 
   WebServerRole:

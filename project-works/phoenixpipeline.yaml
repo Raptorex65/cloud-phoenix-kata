@@ -9,7 +9,7 @@ Parameters:
   CFNStackname:
     Type: String
     Description: Name of the cloudformation stack for the application structure
-    Default: cfn-structure
+    Default: ''
   GitHubOwner:
     Type: String
     Description: GitHub Owner
@@ -17,7 +17,7 @@ Parameters:
   GitHubRepo:
     Type: String
     Description: GitHub Repo
-    Default: 'https://github.com/Raptorex65/cloud-phoenix-kata.git'
+    Default: ''
   GitHubBranch:
     Type: String
     Description: GitHub Branch
@@ -25,6 +25,14 @@ Parameters:
   GitHubToken:
     Type: AWS::SSM::Parameter::Value<String>
     Default: Github_Token
+  DeployParameterOverrides:
+    Description: Parameter overrides for the deploy stage
+    Type: String
+    Default: '{}'
+  DeployStackName:
+    Description: The stack name for the deploy stage
+    Type: String
+    Default: ''
 
 Resources:
   Pipeline:
@@ -52,15 +60,15 @@ Resources:
               Branch: !Ref GitHubBranch
               OAuthToken: !Ref GitHubToken
             OutputArtifacts:
-              - Name: SourceCode
+              - Name: SourceArtifact
             RunOrder: 1
         - Name: Build
           Actions:
           - Name: PhoenixAppBuild
             InputArtifacts:
-              - Name: SourceCode
+              - Name: SourceArtifact
             OutputArtifacts:
-              - Name: BuildCode
+              - Name: BuildArtifact
             ActionTypeId:
               Category: Build
               Owner: AWS
@@ -72,9 +80,7 @@ Resources:
           Actions:
           - Name: CloudFormationDeploy
             InputArtifacts:
-              - Name: BuildCode
-            OutputArtifacts:
-              - Name: DeployArtifact
+              - Name: BuildArtifact
             ActionTypeId:
               Category: Deploy
               Owner: AWS
@@ -83,12 +89,14 @@ Resources:
             Configuration: 
               ApplicationName: PhoenixApp
               DeploymentGroupName: PhoenixAppDG
-              ActionMode: CREATE_UPDATE
+              ActionMode: CHANGE_SET_REPLACE
               ChangeSetName: pipeline-changeset
               RoleArn: !GetAtt CloudFormationRole.Arn
               StackName: !Ref CFNStackname
-              Capabilities: CAPABILITY_NAMED_IAM
-              TemplatePath: 'my-project--BuildArtifact::cfn-structure.yaml'
+              Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+              ParameterOverrides: !Ref DeployParameterOverrides
+              TemplatePath: 'BuildArtifact::cfn-structure.yaml'
+              ChangeSetName: !Sub a-${DeployStackName}-Deploy
               RunOrder: 1 
       Tags:
         - Key: Env

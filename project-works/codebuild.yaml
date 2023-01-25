@@ -1,77 +1,33 @@
-AWSTemplateFormatVersion : '2010-09-09'
+AWSTemplateFormatVersion: 2010-09-09
 Description: 'Stack for CodePipeline'
 
-Parameters:
-  PipelineName:
-    Type: String
-    Description: Pipeline Name (Lower case only, since S3 bucket names can only have lowercase)
-    Default: phoenix-pipeline
-
+Resources:
   CodeBuildPhoenix:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${PipelineName}-Build-Project'
-      Artifacts: NO_ARTIFACTS
+      Name: phoenix-build-project
+      Artifacts:
+        Type: "no_artifacts"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:2.0
+        Image: aws/codebuild/standard:4.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: varName1
-            Value: varValue1
-          - Name: varName2
-            Value: varValue2
+          - Name: AWS_DEFAULT_REGION
+            Value: us-east-1
             Type: PLAINTEXT
-          - Name: varName3
-            Value: /CodeBuild/testParameter
+          - Name: DOCKERHUB_USER
+            Value: /CodeBuild/DOCKERHUB_USER
             Type: PARAMETER_STORE
-      ServiceRole: !Ref CodeBuildPhoenixRole
+          - Name: DOCKERHUB_TOKEN
+            Value: /CodeBuild/DOCKERHUB_TOKEN
+            Type: PARAMETER_STORE
+          - Name: AWS_ACCOUNT_ID
+            Value: /CodeBuild/AWS_ACCOUNT_ID
+            Type: PARAMETER_STORE
+        PrivilegedMode: false
+      ServiceRole: arn:aws:iam::075897120159:role/CodeBuildRole
       Source:
         Type: GITHUB
-        Location: https://github.com/Raptorex65/cloud-phoenix-kata.git
+        Location: https://github.com/Raptorex65/phoenix-project.git
 
-
-  CodeBuildPhoenixRole:
-  Type: AWS::IAM::Role
-  Properties:
-    AssumeRolePolicyDocument:
-      Version: "2012-10-17"
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-              - codebuild.amazonaws.com
-          Action:
-            - "sts:AssumeRole"
-    Policies:
-      - PolicyName: "PushImageToEcr"
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - ecr:BatchGetImage
-                - ecr:BatchCheckLayerAvailability
-                - ecr:CompleteLayerUpload
-                - ecr:GetDownloadUrlForLayer
-                - ecr:InitiateLayerUpload
-                - ecr:PutImage
-                - ecr:UploadLayerPart
-                - ecr:GetAuthorizationToken
-              Resource: "*"
-      - PolicyName: "CodeBuildLogsRole"
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource:
-                - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
-
-Outputs:
-  ProjectName:
-    Value: !Ref CodeBuildPhoenix
-    Description: CodeBuild project name

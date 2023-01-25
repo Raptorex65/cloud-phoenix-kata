@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Root stack template for AWS CloudFormation Step by Step series.
+Description: Root stack template for Phoenix Project
 Parameters:
   WebServerImage:
     Type: AWS::EC2::Image::Id
