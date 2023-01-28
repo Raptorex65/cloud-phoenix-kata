@@ -1,11 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: 'Stack for CodePipeline'
-
+Parameters:
+  GithubAddress:
+    Type: String
+    Description: Enter your github repository URL address
 Resources:
   CodeBuildPhoenix:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: phoenix-build-project
+      Name: phoenix-project-build
       Artifacts:
         Type: "no_artifacts"
       Environment:
@@ -25,9 +28,71 @@ Resources:
           - Name: AWS_ACCOUNT_ID
             Value: /CodeBuild/AWS_ACCOUNT_ID
             Type: PARAMETER_STORE
-        PrivilegedMode: false
-      ServiceRole: arn:aws:iam::075897120159:role/CodeBuildRole
+        PrivilegedMode: true
+      ServiceRole: !Ref CodeBuildRole
       Source:
         Type: GITHUB
-        Location: https://github.com/Raptorex65/phoenix-project.git
+        Location: !Ref GithubAddress
+        BuildSpec: my-buildspec.yml
+      TimeoutInMinutes: 20
 
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "PushImageToEcr"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+        - PolicyName: "CodeBuildLogsRole"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "*"
+        - PolicyName: "logs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                      - ecr:GetAuthorizationToken
+                      - ssm:GetParameters
+                  Resource: "*"
+        - PolicyName: "S3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                      - s3:GetObject
+                      - s3:PutObject
+                      - s3:GetObjectVersion
+                  Resource: "*"
