@@ -1,38 +1,39 @@
 AWSTemplateFormatVersion : '2010-09-09'
-Description: 'Stack for CodePipeline'
-
+Description: 'Pipeline Stack designed for Phoenix Project'
 Parameters:
-  PipelineName:
-    Type: String
-    Description: Pipeline Name (Lower case only, since S3 bucket names can only have lowercase)
-    Default: phoenix-pipeline
-  CFNStackname:
-    Type: String
-    Description: Name of the cloudformation stack for the application structure
-    Default: ''
   GitHubOwner:
     Type: String
     Description: GitHub Owner
-    Default: Raptorex65
   GitHubRepo:
     Type: String
     Description: GitHub Repo
-    Default: ''
   GitHubBranch:
     Type: String
     Description: GitHub Branch
-    Default: master
-  GitHubToken:
+    Default: main
+  GitHubOAuthToken: 
     Type: AWS::SSM::Parameter::Value<String>
     Default: Github_Token
+  TemplateFileName:
+    Default: cfnstructure.yaml
+    Description: The file name of the cfn template
+    Type: String
+  TestStackName:
+    Default: TestStack
+    Description: A name for the App stack
+    Type: String
   DeployParameterOverrides:
     Description: Parameter overrides for the deploy stage
     Type: String
-    Default: '{}'
-  DeployStackName:
-    Description: The stack name for the deploy stage
+    Default: '{"DBStringParam": "DBStringParam", "ALBRequestCountTargetValue": "100", "Keyname": "phoenix", "ImageId": "ami-0fe472d8a85bc7b0e"}'
+  ProdStackName:
+    Default: ProdPhoenixStack
+    Description: A name for the production stack
     Type: String
-    Default: ''
+  ChangeSetName:
+    Default: UpdatePreview-Phoenix
+    Description: A name for the production stack change set
+    Type: String
 
 Resources:
   Pipeline:
@@ -40,9 +41,6 @@ Resources:
     Properties:
       Name: Phoenix-Pipe
       RoleArn: !GetAtt PipelineRole.Arn
-      ArtifactStore:
-        Location: pipe-source
-        Type: S3
       DisableInboundStageTransitions: []
       Stages:
         - Name: GitHubSource
@@ -58,7 +56,8 @@ Resources:
               Owner: !Ref GitHubOwner
               Repo: !Ref GitHubRepo
               Branch: !Ref GitHubBranch
-              OAuthToken: !Ref GitHubToken
+              PollForSourceChanges: false
+              OAuthToken: !Ref GitHubOAuthToken
             OutputArtifacts:
               - Name: SourceArtifact
             RunOrder: 1
@@ -76,38 +75,79 @@ Resources:
               Provider: CodeBuild
             Configuration:
               ProjectName: !Ref CodeBuildPhoenix
-        - Name: Deploy
+            RunOrder: 1
+        - Name: TestStage
           Actions:
-          - Name: CloudFormationDeploy
-            InputArtifacts:
-              - Name: BuildArtifact
-            ActionTypeId:
-              Category: Deploy
-              Owner: AWS
-              Version: 1
-              Provider: CloudFormation
-            Configuration: 
-              ApplicationName: PhoenixApp
-              DeploymentGroupName: PhoenixAppDG
-              ActionMode: CHANGE_SET_REPLACE
-              ChangeSetName: pipeline-changeset
-              RoleArn: !GetAtt CloudFormationRole.Arn
-              StackName: !Ref CFNStackname
-              Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-              ParameterOverrides: !Ref DeployParameterOverrides
-              TemplatePath: 'BuildArtifact::cfn-structure.yaml'
-              ChangeSetName: !Sub a-${DeployStackName}-Deploy
+            - Name: Deploy
+              InputArtifacts:
+                - Name: BuildArtifact
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS  
+                Version: 1
+                Provider: CloudFormation
+              Configuration: 
+                ActionMode: REPLACE_ON_FAILURE
+                RoleArn: !GetAtt CFNRole.Arn
+                StackName: !Ref TestStackName
+                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Ref DeployParameterOverrides
+                TemplatePath: !Sub "BuildArtifact::${TemplateFileName}"
               RunOrder: 1 
+            - Name: ApproveTestStack
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              RunOrder: '2'
+            - Name: DeleteTestStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              Configuration:
+                ActionMode: DELETE_ONLY
+                RoleArn: !GetAtt CFNRole.Arn
+                StackName: !Ref TestStackName
+              RunOrder: '3'
+        - Name: ProdStage
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              InputArtifacts:
+                - Name: BuildArtifact
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                RoleArn: !GetAtt CFNRole.Arn
+                StackName: !Ref ProdStackName
+                ChangeSetName: !Ref ChangeSetName
+                TemplatePath: !Sub "BuildArtifact::${TemplateFileName}"
+              RunOrder: '1'
       Tags:
         - Key: Env
           Value: Prod
+      ArtifactStore:
+        Location: !Ref ArtifactBucket
+        Type: S3
+
+  ArtifactBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        VersioningConfiguration:
+          Status: Enabled
 
   CodeBuildPhoenix:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${PipelineName}-build-project'
+      Name: !Ref AWS::StackName
       Artifacts: 
-        Type: "no_artifacts"
+        Type: CODEPIPELINE
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:4.0
@@ -116,28 +156,51 @@ Resources:
           - Name: AWS_DEFAULT_REGION
             Value: us-east-1
             Type: PLAINTEXT
+          - Name: AWS_ACCOUNT_ID
+            Value: /CodeBuild/AWS_ACCOUNT_ID
+            Type: PARAMETER_STORE
           - Name: DOCKERHUB_USER
             Value: /CodeBuild/DOCKERHUB_USER
             Type: PARAMETER_STORE
           - Name: DOCKERHUB_TOKEN
             Value: /CodeBuild/DOCKERHUB_TOKEN
             Type: PARAMETER_STORE
-          - Name: AWS_ACCOUNT_ID
-            Value: /CodeBuild/AWS_ACCOUNT_ID
-            Type: PARAMETER_STORE
+        PrivilegedMode: true
       ServiceRole: !Ref CodeBuildRole
       Source:
-        Type: GITHUB
-        Location: https://github.com/Raptorex65/cloud-phoenix-kata.git
-      Triggers:
-        BuildType: BUILD
-        Webhook: true
-        FilterGroups:
-        - - Type: EVENT
-            Pattern: PUSH,PULL_REQUEST_MERGED
-          - Type: HEAD_REF
-            Pattern: ^refs/heads/prod$
-            ExcludeMatchedPattern: false
+        Type: CODEPIPELINE
+        BuildSpec: my-buildspec.yml
+
+  CFNRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [cloudformation.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: CloudFormationRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - 'ec2:*'
+                Effect: Allow
+                Resource: '*'
+        - PolicyName: "S3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+                Effect: Allow
+                Action:
+                  - s3:*
 
   CodeBuildRole:
     Type: AWS::IAM::Role
@@ -177,46 +240,31 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
-
-  CloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${PipelineName}-cloudformation'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: 
-                - cloudformation.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonSSMFullAccess"
-        - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-        - "arn:aws:iam::aws:policy/IAMFullAccess"
-        - "arn:aws:iam::aws:policy/AWSCodeDeployFullAccess"
-      Policies:
-        - PolicyName: !Sub '${PipelineName}-cloudformation'
+                  - "*"
+        - PolicyName: "ssm"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Resource: '*'
-                Action:
-                - 's3:GetObject'
-                - 's3:GetObjectVersion'
-                - 's3:GetBucketVersioning'
-              - Effect: Allow
-                Resource: 'arn:aws:s3:::codepipeline*'
-                Action:
-                - 's3:PutObject'
+                -
+                  Effect: "Allow"
+                  Action:
+                      - ssm:GetParameters
+                  Resource: "*"
+        - PolicyName: "S3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                      - s3:GetObject
+                      - s3:PutObject
+                      - s3:GetObjectVersion
+                  Resource: "*"
 
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${PipelineName}-pipeline'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -230,31 +278,24 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Action:
-                - 's3:GetObject'
-                - 's3:GetObjectVersion'
-                - 's3:GetBucketVersioning'
-                Effect: 'Allow'
-                Resource: '*'
-              - Action:
-                - 's3:PutObject'
-                Effect: 'Allow'
-                Resource:
-                - arn:aws:s3:::pipe-source
-              - Action:
-                - 'codecommit:CancelUploadArchive'
-                - 'codecommit:GetBranch'
-                - 'codecommit:GetCommit'
-                - 'codecommit:GetUploadArchiveStatus'
-                - 'codecommit:UploadArchive'
-                Effect: 'Allow'
-                Resource: '*'
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - s3:*
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - iam:PassRole
               - Action:
                 - 'codedeploy:CreateDeployment'
                 - 'codedeploy:GetApplicationRevision'
                 - 'codedeploy:GetDeployment'
                 - 'codedeploy:GetDeploymentConfig'
                 - 'codedeploy:RegisterApplicationRevision'
+                - 'codedeploy:CreateDeploymentGroup'
+                - 'codedeploy:GetApplication'
                 Effect: 'Allow'
                 Resource: '*'
               - Action:
@@ -270,17 +311,6 @@ Resources:
                 Effect: 'Allow'
                 Resource: '*'
               - Action:
-                - 'opsworks:CreateDeployment'
-                - 'opsworks:DescribeApps'
-                - 'opsworks:DescribeCommands'
-                - 'opsworks:DescribeDeployments'
-                - 'opsworks:DescribeInstances'
-                - 'opsworks:DescribeStacks'
-                - 'opsworks:UpdateApp'
-                - 'opsworks:UpdateStack'
-                Effect: 'Allow'
-                Resource: '*'
-              - Action:
                 - 'cloudformation:CreateStack'
                 - 'cloudformation:DeleteStack'
                 - 'cloudformation:DescribeStacks'
@@ -292,14 +322,21 @@ Resources:
                 - 'cloudformation:SetStackPolicy'
                 - 'cloudformation:ValidateTemplate'
                 - 'iam:PassRole'
+                - 'sns:Publish'
                 Effect: 'Allow'
                 Resource: '*'
-              - Action:
-                - 'codebuild:BatchGetBuilds'
-                - 'codebuild:StartBuild'
-                Effect: 'Allow'
-                Resource: '*'
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - iam:PassRole
+              - Resource:
+                  - !Ref CodeStarConnection
+                Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+
 Outputs:
-  ProjectName:
-    Value: !Ref CodeBuildPhoenix
-    Description: CodeBuild project name
+  PipelineUrl:
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
