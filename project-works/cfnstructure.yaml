@@ -5,11 +5,20 @@ Parameters:
   DBStringParam:
     Type: AWS::SSM::Parameter::Value<String>
     Default: 'DBConString'
-
   ALBRequestCountTargetValue:
     Type: Number
     Default: "100"
     Description: The optimal average request count per instance during any one-minute interval
+  Keyname:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Enter your Keypair
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI of the web server instance
+    Default: ami-0fe472d8a85bc7b0e
+  SSLCertificateArn:
+    Type: String
+    Description: Existing AWS SSL Certificate Arn for the domain.
 
 Resources:
   Vpc:
@@ -269,16 +278,34 @@ Resources:
         - Key: Name
           Value: 'target-group'
 
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: "HTTPS"
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateArn
+      SslPolicy: "ELBSecurityPolicy-2016-08"
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
-      Protocol: HTTP
+      Protocol: "HTTP"
       DefaultActions:
-        - 
-          TargetGroupArn: !Ref TargetGroup
-          Type: forward
+        - Type: "redirect"
+          RedirectConfig:
+            Protocol: "HTTPS"
+            Port: 443
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
 
   ALBDNSRecord:
     Type: AWS::Route53::RecordSetGroup
@@ -307,7 +334,6 @@ Resources:
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
-        - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
         - "arn:aws:iam::aws:policy/AutoScalingFullAccess"
 
   InstanceProfile:
@@ -323,8 +349,8 @@ Resources:
     Properties:
       LaunchTemplateData:
         InstanceType: t2.micro
-        ImageId: ami-0fe472d8a85bc7b0e
-        KeyName: phoenix
+        ImageId: !Ref ImageId
+        KeyName: !Ref Keyname
         SecurityGroupIds: 
           - !Ref WebServerSecurityGroup
         IamInstanceProfile:
@@ -336,8 +362,9 @@ Resources:
           Tags:
             - Key: Name
               Value: !Sub '${AWS::StackName}-WebServer'
-            - Key: Env
-              Value: Prod
+            - Key: 'Env'
+              Value: 'Prod'
+        
         UserData:
           Fn::Base64: !Sub
             - |
@@ -379,8 +406,8 @@ Resources:
               sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport "${FileSystemId}".efs.us-east-1.amazonaws.com:/ efs
               sudo mkdir efs/logs efs/data
               #change mongodb data and log directories to efs
-              sed 's|/var/log/mongodb|/home/ec2-user/efs/logs|g' /etc/mongod.conf
-              sed 's|/var/lib/mongo|/home/ec2-user/efs/data|g' /etc/mongod.conf
+              sudo sed -i.bak 's|/var/log/mongodb|/home/ec2-user/efs/logs|g' /etc/mongod.conf
+              sudo sed -i.bak 's|/var/lib/mongo|/home/ec2-user/efs/data|g' /etc/mongod.conf
               # install codedeploy agent
               yum install ruby wget -y
               cd /home/ec2-user
@@ -414,7 +441,7 @@ Resources:
       TargetGroupARNs:
         - !Ref TargetGroup
       HealthCheckGracePeriod: 300
-
+  
   ALBRequestCountScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -442,14 +469,14 @@ Resources:
     DependsOn:
       - AutoScalingGroup
     Properties:
-      EvaluationPeriods: 5
+      EvaluationPeriods: 5 # The number of periods over which data is compared to the specified threshold. 
       Statistic: Average
       Threshold: 40
       AlarmDescription: Alarm if CPU too low, so we can decrease instances gracefully
-      Period: 60
+      Period: 60 # The period, in seconds, over which the statistic is applied. This is required for an alarm based on a metric. Valid values are 10, 30, 60, and any multiple of 60.
       AlarmActions:
         - !Ref ScaleDownPolicy
-      Namespace: AWS/EC2
+      Namespace: AWS/EC2 # This is required for an alarm based on a metric
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
@@ -460,4 +487,3 @@ Outputs:
   LoadBalancerDNSName:
     Description: DNS name of the application load balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-
