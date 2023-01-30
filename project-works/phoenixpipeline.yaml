@@ -14,7 +14,7 @@ Parameters:
   GitHubOAuthToken: 
     Type: AWS::SSM::Parameter::Value<String>
     Default: Github_Token
-  TemplateFileName:
+  TemplateFile:
     Default: cfnstructure.yaml
     Description: The file name of the cfn template
     Type: String
@@ -22,16 +22,23 @@ Parameters:
     Default: TestStack
     Description: A name for the App stack
     Type: String
+  ProdStackName:
+    Default: ProdStack
+    Description: A name for the production stack
+    Type: String
   DeployParameterOverrides:
     Description: Parameter overrides for the deploy stage
     Type: String
     Default: '{"DBStringParam": "DBStringParam", "ALBRequestCountTargetValue": "100", "Keyname": "phoenix", "ImageId": "ami-0fe472d8a85bc7b0e"}'
-  ProdStackName:
-    Default: ProdPhoenixStack
-    Description: A name for the production stack
+  NewDeployParameterOverrides:
+    Description: Parameter overrides for the deploy stage
+    Type: String
+    Default: '{"DBStringParam": "DBStringParam", "ALBRequestCountTargetValue": "100", "Keyname": "secondKey", "ImageId": "ami-0aa7d40eeae50c9a9"}'
+  Email:
+    Description: The email address where CodePipeline sends pipeline notifications
     Type: String
   ChangeSetName:
-    Default: UpdatePreview-Phoenix
+    Default: UpdatePreview
     Description: A name for the production stack change set
     Type: String
 
@@ -80,7 +87,7 @@ Resources:
           Actions:
             - Name: Deploy
               InputArtifacts:
-                - Name: BuildArtifact
+                - Name: SourceArtifact
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS  
@@ -92,7 +99,7 @@ Resources:
                 StackName: !Ref TestStackName
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
                 ParameterOverrides: !Ref DeployParameterOverrides
-                TemplatePath: !Sub "BuildArtifact::${TemplateFileName}"
+                TemplatePath: !Sub "SourceArtifact::${TemplateFile}"
               RunOrder: 1 
             - Name: ApproveTestStack
               ActionTypeId:
@@ -100,6 +107,9 @@ Resources:
                 Owner: AWS
                 Provider: Manual
                 Version: '1'
+              Configuration:
+                NotificationArn: !Ref CodePipelineSNSTopic
+                CustomData: !Sub 'Do you want to create a change set against the production stack and delete the ${TestStackName} stack?'
               RunOrder: '2'
             - Name: DeleteTestStack
               ActionTypeId:
@@ -127,11 +137,32 @@ Resources:
                 RoleArn: !GetAtt CFNRole.Arn
                 StackName: !Ref ProdStackName
                 ChangeSetName: !Ref ChangeSetName
-                TemplatePath: !Sub "BuildArtifact::${TemplateFileName}"
+                ParameterOverrides: !Ref NewDeployParameterOverrides
+                TemplatePath: !Sub "BuildArtifact::${TemplateFile}"
               RunOrder: '1'
-      Tags:
-        - Key: Env
-          Value: Prod
+            - Name: ApproveChangeSet
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref CodePipelineSNSTopic
+                CustomData: !Sub 'A new change set was created for the ${ProdStackName} stack. Do you want to implement the changes?'
+              RunOrder: '2'
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                ChangeSetName: !Ref ChangeSetName
+                RoleArn: !GetAtt [CFNRole, Arn]
+                StackName: !Ref ProdStackName
+              RunOrder: '3'
+
       ArtifactStore:
         Location: !Ref ArtifactBucket
         Type: S3
@@ -141,6 +172,13 @@ Resources:
       Properties:
         VersioningConfiguration:
           Status: Enabled
+
+  CodePipelineSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: !Ref Email
+          Protocol: email
 
   CodeBuildPhoenix:
     Type: AWS::CodeBuild::Project
@@ -187,8 +225,23 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              - Effect: "Allow"
+                Action:
+                    - ssm:GetParameters
+                Resource: "*"
               - Action:
                   - 'ec2:*'
+                  - 'iam:PassRole'
+                  - 'iam:CreateRole'
+                  - "iam:GetRole"
+                  - "iam:GetRolePolicy"
+                  - "iam:PassRole"
+                  - "iam:DetachRolePolicy"
+                  - "iam:DeleteRolePolicy"
+                  - "iam:DeleteRole"
+                  - "iam:CreateRole"
+                  - "iam:AttachRolePolicy"
+                  - "iam:PutRolePolicy"
                 Effect: Allow
                 Resource: '*'
         - PolicyName: "S3"
@@ -278,6 +331,10 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              - Effect: "Allow"
+                Action:
+                    - ssm:GetParameters
+                Resource: "*"
               - Resource: "*"
                 Effect: Allow
                 Action:
@@ -322,6 +379,16 @@ Resources:
                 - 'cloudformation:SetStackPolicy'
                 - 'cloudformation:ValidateTemplate'
                 - 'iam:PassRole'
+                - 'iam:CreateRole'
+                - "iam:GetRole"
+                - "iam:GetRolePolicy"
+                - "iam:PassRole"
+                - "iam:DetachRolePolicy"
+                - "iam:DeleteRolePolicy"
+                - "iam:DeleteRole"
+                - "iam:CreateRole"
+                - "iam:AttachRolePolicy"
+                - "iam:PutRolePolicy"
                 - 'sns:Publish'
                 Effect: 'Allow'
                 Resource: '*'
@@ -331,11 +398,6 @@ Resources:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                   - iam:PassRole
-              - Resource:
-                  - !Ref CodeStarConnection
-                Effect: Allow
-                Action:
-                  - codestar-connections:UseConnection
 
 Outputs:
   PipelineUrl:
